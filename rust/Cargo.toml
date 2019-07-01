@@ -1,0 +1,19 @@
+[package]
+name = "alltools"
+version = "0.1.0"
+authors = ["Jacques Heunis <jaaksemail@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+atty = "0.2"
+chrono = "0.4"
+getopts = "0.2"
+
+# NOTE: Cargo will automatically compile every file in src/bin/*.rs into an executable with the same name as the file
+[[bin]]
+name = "hex2utf8"
+path = "src/bin/hex2utf8.rs"
+
+[[bin]]
+name = "base642hex"
+path = "src/bin/base642hex.rs"
