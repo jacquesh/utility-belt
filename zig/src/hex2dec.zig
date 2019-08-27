@@ -43,12 +43,17 @@ pub fn main() !void {
     var stdout = stdoutFile.outStream().stream;
 
     var args = std.os.args();
+    const program = args.next(alloc);
+    // TODO: I'm fairly certain this would skip the first argument on linux? Seemed to work without it...
+    //warn("Program name is {}\n", program);
+
     var argsPresent = false;
     while (true) {
         // TODO: This can be merged into the while loop header (search docs for 'while with optionals' and 'while with error unions')
         const hexArg = try args.next(alloc) orelse break;
         const argValue = hex2int(hexArg);
-        try stdout.print("{}\n", argValue);
+        warn("{}\n", argValue);
+        // TODO: This fails on Windows with "error: Unexpected": try stdout.print("{}\n", argValue);
         argsPresent = true;
     }
 

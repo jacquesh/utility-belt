@@ -1,0 +1,3 @@
+- Fix inline TODOs in zig/hex2dec
+- Add dec2hex once hex2dec is sorted and complete
+- Add support for dash-separated hex for hex2utf8 and hex2base64 (e.g FF-FF-FF)
