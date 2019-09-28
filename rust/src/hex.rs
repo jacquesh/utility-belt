@@ -17,33 +17,38 @@ pub fn hex_to_bytes(input: &str) -> Option<Vec<u8>> {
         return Some(vec![]);
     }
 
-    if input.len() % 2 != 0 {
-        return None
-    }
-
     let bytes = input.as_bytes();
     let mut start_index: usize = 0;
-    if (bytes[0] == b'0') && (bytes[1] == b'x') {
+    if (bytes.len() > 1) && (bytes[0] == b'0') && (bytes[1] == b'x') {
         start_index = 2;
     }
 
-    let result_capacity = (bytes.len()-start_index)/2;
-    let mut result = Vec::with_capacity(result_capacity);
-    for i in 0..result_capacity {
-        let v1 = hex_char_value(bytes[start_index + 2*i]);
-        let v2 = hex_char_value(bytes[start_index + 2*i + 1]);
+    let max_result_length = (bytes.len()-start_index)/2;
+    let mut result = Vec::with_capacity(max_result_length);
+    let mut current_byte = 0;
+    let mut nibble_count = 0;
+    for i in start_index..bytes.len() {
+        if bytes[i] == b'-' {
+            continue;
+        }
 
-        let v1 = match v1 {
+        let hexval = hex_char_value(bytes[i]);
+        let hexval = match hexval {
             Some(x) => x,
             None => return None
         };
-        let v2 = match v2 {
-            Some(x) => x,
-            None => return None
-        };
 
-        let resultval = (v1 << 4) | v2;
-        result.push(resultval);
+        current_byte = (current_byte << 4) | hexval;
+        nibble_count += 1;
+        if nibble_count == 2 {
+            result.push(current_byte);
+            nibble_count = 0;
+            current_byte = 0;
+        }
+    }
+
+    if nibble_count != 0 {
+        result.push(current_byte);
     }
 
     Some(result)
