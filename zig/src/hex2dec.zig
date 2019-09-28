@@ -1,31 +1,22 @@
 const std = @import("std");
+const fmt = std.fmt;
 const mem = std.mem;
 const warn = std.debug.warn;
 
-const StringConvertError = error{InvalidHexCharacter};
-
-fn charToDigit(char: u8) !u8 {
-    return switch (char) {
-        '0'...'9' => char - '0',
-        'a'...'f' => char + 10 - 'a',
-        'A'...'F' => char + 10 - 'A',
-        else => StringConvertError.InvalidHexCharacter,
-    };
-}
-
-// TODO: This can actually be replaced with fmt.parseInt(u128, hexChars, 16) but then we need a string.replace function to remove the dashes
 fn hex2int(hexChars: []u8) !u128 {
     var hexSlice = hexChars[0..];
     if (mem.eql(u8, hexSlice[0..2], "0x")) {
         hexSlice = hexChars[2..];
     }
 
+    // NOTE: If not for the fact that we need to ignore dashes ('-') in the
+    //       input, we could replace this logic with a call to fmt.parseInt()
     var val: u128 = 0;
     for (hexSlice) |c| {
         if (c == '-') {
             continue;
         }
-        var charVal = try charToDigit(c);
+        var charVal = try fmt.charToDigit(c, 16);
         val = (val * 16) + charVal;
     }
 
@@ -33,31 +24,34 @@ fn hex2int(hexChars: []u8) !u128 {
 }
 
 pub fn main() !void {
-    var kernelAlloc = std.heap.DirectAllocator.init();
-    var arenaAlloc = std.heap.ArenaAllocator.init(&kernelAlloc.allocator);
-    defer kernelAlloc.deinit();
+    var arenaAlloc = std.heap.ArenaAllocator.init(std.heap.direct_allocator);
     defer arenaAlloc.deinit();
     const alloc = &arenaAlloc.allocator;
 
     const stdoutFile = try std.io.getStdOut();
     var stdout = stdoutFile.outStream().stream;
 
-    var args = std.os.args();
+    var args = std.process.args();
     const program = args.next(alloc);
-    // TODO: I'm fairly certain this would skip the first argument on linux? Seemed to work without it...
-    //warn("Program name is {}\n", program);
 
     var argsPresent = false;
-    while (true) {
-        // TODO: This can be merged into the while loop header (search docs for 'while with optionals' and 'while with error unions')
-        const hexArg = try args.next(alloc) orelse break;
-        const argValue = hex2int(hexArg);
-        warn("{}\n", argValue);
-        // TODO: This fails on Windows with "error: Unexpected": try stdout.print("{}\n", argValue);
-        argsPresent = true;
+    while (args.next(alloc)) |argErrorUnion| {
+        if (argErrorUnion) |hexArg| {
+            if (hex2int(hexArg)) |hexValue| {
+                //warn("{}\n", hexValue);
+                // TODO: This fails on Windows with "error: Unexpected":
+                try stdout.print("{}\n", hexValue);
+            } else |parseErr| {
+                warn("Failed to parse hex value {}: {}\n", hexArg, parseErr);
+            }
+            argsPresent = true;
+        } else |err| {
+            warn("Error when attempting to read argument: {}\n", err);
+            break;
+        }
     }
 
     if (!argsPresent) {
-        warn("Usage: hex2dec INPUT...\n");
+        warn("Usage: {} INPUT...\n", program);
     }
 }
