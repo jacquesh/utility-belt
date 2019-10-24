@@ -1,6 +1,6 @@
 use std::env;
 use std::process;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use chrono::offset::TimeZone;
 use getopts::Options;
 
@@ -30,35 +30,41 @@ fn main() {
     }
 
     let use_millis = opts.opt_present("m");
-    let use_iso_format = opts.opt_present("s");
     // TODO: Print usage if no other args given (and not interactive?)
     for arg in opts.free {
-        process_input(&arg, use_millis, use_iso_format);
+        process_input(&arg, use_millis);
     }
+
+    // TODO: Read from stdin so we can pipe things together
 }
 
-fn process_input(input: &str, use_millis: bool, use_iso_format: bool) {
-    let input_timestamp = match input.parse::<i64>() {
-        Ok(n) => n,
-        Err(e) => {
-            eprintln!("Bad input: \"{}\" is not a valid unix timestamp. Error: '{}'", input, e);
+fn process_input(input: &str, use_millis: bool) {
+    match input.parse::<DateTime<Utc>>() {
+        Ok(dt) => {
+            // TODO: This should parse the output of non-iso unix2utc output?
+            output_timestamp(dt, use_millis);
             return;
-        }
-    };
-
-    let output = match use_millis {
-        true => {
-            let seconds = input_timestamp/1000;
-            let nanos = ((input_timestamp % 1000) * 1_000_000) as u32;
-            Utc.timestamp(seconds, nanos)
         },
-        false => Utc.timestamp(input_timestamp, 0)
+        Err(_e) => {}
     };
 
-    if use_iso_format {
-        println!("{}", output.to_rfc3339());
+    match DateTime::parse_from_rfc3339(input) {
+        Ok(dt) => {
+            output_timestamp(dt, use_millis);
+            return;
+        },
+        Err(_e) => {}
+    };
+
+    eprintln!("Bad input: {} is not a time string with a recognized format", input);
+}
+
+fn output_timestamp(instant: DateTime<impl TimeZone>, use_millis: bool) {
+    if use_millis {
+        let timestamp = (instant.timestamp() * 1000) + (instant.timestamp_subsec_millis() as i64);
+        println!("{}", timestamp);
     } else {
-        println!("{}", output.to_string());
+        println!("{}", instant.timestamp());
     }
 }
 
