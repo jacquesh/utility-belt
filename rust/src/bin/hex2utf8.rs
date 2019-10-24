@@ -8,6 +8,9 @@ use getopts::Options;
 fn print_usage(program: &str, opts: Options) {
     let brief = format!("Usage: {} [OPTIONS] [INPUT]...", program);
     print!("{}", opts.usage(&brief));
+
+    println!("");
+    println!("If stdin has been redirected then each line of stdin will be separately decoded and printed");
 }
 
 fn main() {
@@ -30,9 +33,6 @@ fn main() {
         println!("");
 
         print_usage(program, opts_spec);
-
-        println!("");
-        println!("If stdin has been redirected then each line of stdin will be separately decoded and printed");
         return;
     }
 

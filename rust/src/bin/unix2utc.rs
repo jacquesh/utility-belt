@@ -1,8 +1,16 @@
-use std::env;
-use std::process;
+use std::{env, io, process};
+use atty::Stream;
 use chrono::Utc;
 use chrono::offset::TimeZone;
 use getopts::Options;
+
+fn print_usage(program: &str, opts: Options) {
+    let brief = format!("Usage: {} [OPTIONS] [INPUT]...", program);
+    print!("{}", opts.usage(&brief));
+
+    println!("");
+    println!("If stdin has been redirected then each line of stdin will be separately decoded and printed");
+}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -24,16 +32,46 @@ fn main() {
         println!("Convert a unix timestamp into an equivalent human-readable date-time string");
         println!("");
 
-        let brief = format!("Usage: {} [OPTIONS] [INPUT]...", program);
-        print!("{}", opts_spec.usage(&brief));
+        print_usage(program, opts_spec);
         return;
     }
 
     let use_millis = opts.opt_present("m");
     let use_iso_format = opts.opt_present("s");
-    // TODO: Print usage if no other args given (and not interactive?)
+    let is_stdin_tty = atty::is(Stream::Stdin);
+
+    if is_stdin_tty && opts.free.is_empty() {
+        eprintln!("No input values provided");
+        eprintln!("");
+        print_usage(program, opts_spec);
+        process::exit(1);
+    }
+
     for arg in opts.free {
         process_input(&arg, use_millis, use_iso_format);
+    }
+
+    if is_stdin_tty {
+        // NOTE: We only read from stdin (by default, we could conceivably add a flag for it)
+        //       so that the user doesn't run the program and then sit confused as to whether the
+        //       program is stuck or just waiting for input.
+        return;
+    }
+
+    let mut input = String::new();
+    loop {
+        if let Err(e) = io::stdin().read_line(&mut input) {
+            eprintln!("Error: {}", e.to_string());
+            break;
+        }
+
+        let trimmed = input.trim();
+        if trimmed.len() == 0 {
+            break;
+        }
+
+        process_input(trimmed, use_millis, use_iso_format);
+        input.clear();
     }
 }
 
