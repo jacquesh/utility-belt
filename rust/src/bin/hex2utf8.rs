@@ -75,7 +75,7 @@ fn main() {
 }
 
 fn process_input(input: &str) {
-    match alltools::hex::hex_to_bytes(input) {
+    match alltools::hex::to_bytes(input) {
         Some(input_bytes) => {
             match str::from_utf8(&input_bytes) {
                 Ok(utf8) => println!("{}", utf8),

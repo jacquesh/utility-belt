@@ -76,6 +76,6 @@ fn main() {
 
 fn process_input(input: &str) {
     let bytes = input.as_bytes();
-    let hex = alltools::hex::bytes_to_hex(bytes);
+    let hex = alltools::hex::from_bytes(bytes);
     println!("{}", hex);
 }

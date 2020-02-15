@@ -16,7 +16,7 @@ fn parse_base64_char(c: u8) -> Base64CharParseResult {
     }
 }
 
-pub fn base64_to_bytes(input: &str) -> Option<Vec<u8>> {
+pub fn to_bytes(input: &str) -> Option<Vec<u8>> {
     if input.len() == 0 {
         return Some(vec![]);
     }
@@ -51,7 +51,7 @@ pub fn base64_to_bytes(input: &str) -> Option<Vec<u8>> {
     Some(result)
 }
 
-pub fn bytes_to_base64(input: &[u8]) -> String {
+pub fn from_bytes(input: &[u8]) -> String {
     const HEX: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut output = Vec::with_capacity(input.len()); // TODO: This should be * 4/3
     let mut bits_available = 0;
@@ -112,7 +112,7 @@ mod base64_tests {
     #[test]
     fn base642bytes_two_padding_bytes() {
         let input = "3q2+7w==";
-        let output = base64_to_bytes(input).unwrap();
+        let output = to_bytes(input).unwrap();
         assert_eq!(
             vec![0xDE, 0xAD, 0xBE, 0xEF],
             output
@@ -122,7 +122,7 @@ mod base64_tests {
     #[test]
     fn base642bytes_one_padding_bytes() {
         let input = "3q2+7wk=";
-        let output = base64_to_bytes(input).unwrap();
+        let output = to_bytes(input).unwrap();
         assert_eq!(
             vec![0xDE, 0xAD, 0xBE, 0xEF, 0x09],
             output
@@ -132,7 +132,7 @@ mod base64_tests {
     #[test]
     fn base642bytes_zero_padding_bytes() {
         let input = "3q2+7wkA";
-        let output = base64_to_bytes(input).unwrap();
+        let output = to_bytes(&input).unwrap();
         assert_eq!(
             vec![0xDE, 0xAD, 0xBE, 0xEF, 0x09, 0x00],
             output
@@ -142,7 +142,7 @@ mod base64_tests {
     #[test]
     fn bytes2base64_two_padding_bytes() {
         let input = vec![0xDE, 0xAD, 0xBE, 0xEF];
-        let output = bytes_to_base64(input);
+        let output = from_bytes(&input);
         assert_eq!(
             "3q2+7w==",
             output
@@ -152,7 +152,7 @@ mod base64_tests {
     #[test]
     fn bytes2base64_one_padding_byte() {
         let input = vec![0xDE, 0xAD, 0xBE, 0xEF, 0x09];
-        let output = bytes_to_base64(input);
+        let output = from_bytes(&input);
         assert_eq!(
             "3q2+7wk=",
             output
@@ -162,7 +162,7 @@ mod base64_tests {
     #[test]
     fn bytes2base64_zero_padding_bytes() {
         let input = vec![0xDE, 0xAD, 0xBE, 0xEF, 0x09, 0x00];
-        let output = bytes_to_base64(input);
+        let output = from_bytes(&input);
         assert_eq!(
             "3q2+7wkA",
             output

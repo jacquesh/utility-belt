@@ -12,7 +12,7 @@ fn hex_char_value(u: u8) -> Option<u8> {
     None
 }
 
-pub fn hex_to_bytes(input: &str) -> Option<Vec<u8>> {
+pub fn to_bytes(input: &str) -> Option<Vec<u8>> {
     if input.len() == 0 {
         return Some(vec![]);
     }
@@ -23,7 +23,7 @@ pub fn hex_to_bytes(input: &str) -> Option<Vec<u8>> {
         start_index = 2;
     }
 
-    let max_result_length = (bytes.len()-start_index)/2;
+    let max_result_length = (bytes.len()-start_index)/2 + 1;
     let mut result = Vec::with_capacity(max_result_length);
     let mut current_byte = 0;
     let mut nibble_count = 0;
@@ -54,7 +54,7 @@ pub fn hex_to_bytes(input: &str) -> Option<Vec<u8>> {
     Some(result)
 }
 
-pub fn bytes_to_hex(input: &[u8]) -> String {
+pub fn from_bytes(input: &[u8]) -> String {
     const HEX: &[u8] = b"0123456789ABCDEF";
     let mut output = Vec::with_capacity(input.len() * 2);
     output.push(b'0');
@@ -78,7 +78,7 @@ mod hex_tests {
     #[test]
     fn hex2bytes_leading_0x_included() {
         let input = "0xDEADBEEF01";
-        let output = hex_to_bytes(input).unwrap();
+        let output = to_bytes(input).unwrap();
         assert_eq!(
             vec![0xDE, 0xAD, 0xBE, 0xEF, 0x01],
             output
@@ -88,7 +88,7 @@ mod hex_tests {
     #[test]
     fn hex2bytes_leading_0x_excluded() {
         let input = "DEADBEEF01";
-        let output = hex_to_bytes(input).unwrap();
+        let output = to_bytes(input).unwrap();
         assert_eq!(
             vec![0xDE, 0xAD, 0xBE, 0xEF, 0x01],
             output
@@ -98,7 +98,7 @@ mod hex_tests {
     #[test]
     fn bytes2hex() {
         let input = vec![0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x00];
-        let output = bytes_to_hex(input);
+        let output = from_bytes(&input);
         assert_eq!(
             "0xDEADBEEF0100",
             output
