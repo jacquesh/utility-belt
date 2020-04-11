@@ -20,6 +20,7 @@ fn main() {
     opts_spec.optflag("r", "reverse", "do a reverse lookup (find the domain name given an IP)");
     opts_spec.optflag("v", "verbose", "print additional data");
     opts_spec.optopt("s", "server", "the address of the server(s) to which the DNS queries should be sent", "IP-ADDR");
+    opts_spec.optopt("t", "type", "the type of record to request. A (default), MX, CNAME etc", "TYPE");
     let opts = match opts_spec.parse(&args[1..]) {
         Ok(o) => o,
         Err(e) => {
@@ -42,6 +43,20 @@ fn main() {
     let server = match opts.opt_str("s") {
         Some(srv_url) => srv_url,
         None => String::from("1.1.1.1") // TODO: Get the system default
+    };
+    let query_type = match opts.opt_str("t") {
+        Some(mut query_type_str) => {
+            query_type_str.make_ascii_uppercase();
+            match query_type_str.as_str() {
+                "A" => QueryType::A,
+                "MX" => QueryType::MX,
+                _ => {
+                    eprintln!("Unsupported query type: {} Supported options are A, MX", &query_type_str);
+                    process::exit(1);
+                }
+            }
+        }
+        None => QueryType::A
     };
 
     if opts.free.is_empty() {
@@ -69,8 +84,7 @@ fn main() {
         }
     }
 
-    // TODO: Specify record type
-    process_input(server_ip, query, QueryType::A, reverse, verbose);
+    process_input(server_ip, query, query_type, reverse, verbose);
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -442,7 +456,7 @@ impl DnsResourceRecord {
     fn deserialize(&mut self, cursor: &mut io::Cursor<&[u8]>, all_data: &[u8]) -> io::Result<()> {
         let name_bytes = deserialize_name(cursor, all_data)?;
         match String::from_utf8(name_bytes) {
-            Ok(name) => { 
+            Ok(name) => {
                 self.domain_name = name;
             },
             Err(e) => {
@@ -538,6 +552,40 @@ impl DnsPacket {
     }
 }
 
+fn format_ttl(total_ttl_sec: u32) -> String {
+    let mut result = String::new();
+    let mut ttl = total_ttl_sec;
+    let seconds = ttl % 60;
+    ttl /= 60;
+    let minutes = ttl % 60;
+    ttl /= 60;
+    let hours = ttl % 24;
+    let days = ttl / 24;
+
+    if days != 0 {
+        result.push_str(&format!("{} days", days));
+    }
+    if hours != 0 {
+        if result.len() > 0 {
+            result.push_str(", ");
+        }
+        result.push_str(&format!("{} hours", hours));
+    }
+    if minutes != 0 {
+        if result.len() > 0{
+            result.push_str(", ");
+        }
+        result.push_str(&format!("{} minutes", minutes));
+    }
+    if (seconds != 0) || (result.len() == 0) {
+        if result.len() > 0 {
+            result.push_str(", ");
+        }
+        result.push_str(&format!("{} seconds", seconds));
+    }
+    result
+}
+
 fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: bool, verbose: bool) {
     let mut rng = rand::thread_rng();
 
@@ -545,6 +593,8 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
     request.header.request_id = rng.gen::<u16>();
     request.header.recursion_desired = true; // TODO: Maybe we want to be able to ask for no recursion?
     if reverse {
+        // TODO: Implement this properly.
+        // Defined in the spec @ https://tools.ietf.org/html/rfc1035 and https://www.freesoft.org/CIE/Topics/75.htm
         request.header.opcode = OpCode::Inverse;
     }
     request.header.query_count = 1;
@@ -683,8 +733,12 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
     if response.header.message_truncated {
         println!("WARNING: Packet header indicates that the data received has been truncated!");
     }
-
     println!();
+
+    if verbose || (response.answers.len() == 0) {
+        println!("Received {} answers", response.answers.len());
+    }
+
     for answer in &response.answers {
         print!("{} ({:?}, {:?}): ", answer.domain_name, answer.data_class, answer.data_type);
 
@@ -692,20 +746,51 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
             QueryType::A => {
                 const EXPECTED_LEN: usize = 4;
                 if answer.data.len() != EXPECTED_LEN {
-                    eprintln!("Data type {:?} expects to contain exactly {} bytes and instead contained {}. Ignoring...", answer.data_type, EXPECTED_LEN, answer.data.len());
+                    eprintln!("Response for data type A is expected to contain exactly {} bytes and instead contained {} bytes. Ignoring...", EXPECTED_LEN, answer.data.len());
                 } else {
-                    println!(" {}.{}.{}.{}", answer.data[0], answer.data[1], answer.data[2], answer.data[3]);
+                    println!("  {}.{}.{}.{}  (TTL: {})", answer.data[0], answer.data[1], answer.data[2], answer.data[3], format_ttl(answer.ttl));
                 }
             },
-            // TODO: QueryType::AAAA at least?
+            QueryType::MX => {
+                const MIN_LEN: usize = 3;
+                if answer.data.len() < MIN_LEN {
+                    eprintln!("Response for data type MX is expected to contain at least {} bytes and instead contained {} bytes. Ignoring...", MIN_LEN, answer.data.len());
+                } else {
+                    let mut mx_cursor = io::Cursor::new(&answer.data[..]);
+                    let preference = mx_cursor.read_u16::<BigEndian>().unwrap();
+                    let name_bytes = match deserialize_name(&mut mx_cursor, resp_bytes) {
+                        Ok(name) => name,
+                        Err(e) => {
+                            eprintln!("ERROR: Failed to parse exchange name data from MX record: {}", e);
+                            continue;
+                        }
+                    };
+                    let name = match String::from_utf8(name_bytes) {
+                        Ok(name) => name,
+                        Err(e) => {
+                            eprintln!("ERROR: Failed to parse exchange name as UTF8: {}", e);
+                            continue;
+                        }
+                    };
+                    println!("  {}  (Priority: {}, TTL: {})", name, preference, format_ttl(answer.ttl));
+                }
+            },
+            // TODO: QueryType::AAAA at least?  https://tools.ietf.org/html/rfc3596
             _ => {
                 eprintln!(" Unsupported response data type: {:?}\n", answer.data_type);
             }
         }
     }
 
-    // TODO: Name server RRs
-    // TODO: Additional RRs
+    if verbose || (response.authorities.len() != 0) {
+        // TODO: Name server RRs
+        println!("Received {} authority server records", response.authorities.len());
+    }
+
+    if verbose || (response.additionals.len() != 0) {
+        // TODO: Name server RRs
+        println!("Received {} additional records", response.additionals.len());
+    }
 
     if verbose {
         println!("\n Response packet debug: {:?}", response);
