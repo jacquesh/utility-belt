@@ -1,2 +1,2 @@
-@convertbase -f 64 -t 10 "%*"
+@convertbase -f 64 -t 10 %*
 
