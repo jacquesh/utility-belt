@@ -20,7 +20,7 @@ fn main() {
     opts_spec.optflag("r", "reverse", "do a reverse lookup (find the domain name given an IP)");
     opts_spec.optflag("v", "verbose", "print additional data");
     opts_spec.optopt("s", "server", "the address of the server(s) to which the DNS queries should be sent", "IP-ADDR");
-    opts_spec.optopt("t", "type", "the type of record to request. A (default), MX, CNAME etc", "TYPE");
+    opts_spec.optopt("t", "type", "the type of record to request. A (default), CNAME, MX, etc", "TYPE");
     let opts = match opts_spec.parse(&args[1..]) {
         Ok(o) => o,
         Err(e) => {
@@ -49,9 +49,12 @@ fn main() {
             query_type_str.make_ascii_uppercase();
             match query_type_str.as_str() {
                 "A" => QueryType::A,
+                "CNAME" => QueryType::CNAME,
                 "MX" => QueryType::MX,
+                "NS" => QueryType::NS,
+                "TXT" => QueryType::TXT,
                 _ => {
-                    eprintln!("Unsupported query type: {} Supported options are A, MX", &query_type_str);
+                    eprintln!("Unsupported query type: {} Supported options are A, CNAME, MX, NS, TXT", &query_type_str);
                     process::exit(1);
                 }
             }
@@ -452,6 +455,19 @@ fn deserialize_name(cursor: &mut io::Cursor<&[u8]>, all_data: &[u8]) -> io::Resu
     Ok(result)
 }
 
+fn deserialize_bytes(cursor: &mut io::Cursor<&[u8]>) -> io::Result<Vec<u8>> {
+    let len = cursor.read_u8()?;
+    if len == 0 {
+        return Ok(Vec::new())
+    }
+
+    let mut result = Vec::new();
+    for _ in 0..len {
+        result.push(cursor.read_u8()?);
+    }
+    Ok(result)
+}
+
 impl DnsResourceRecord {
     fn deserialize(&mut self, cursor: &mut io::Cursor<&[u8]>, all_data: &[u8]) -> io::Result<()> {
         let name_bytes = deserialize_name(cursor, all_data)?;
@@ -552,36 +568,52 @@ impl DnsPacket {
     }
 }
 
-fn format_ttl(total_ttl_sec: u32) -> String {
+fn format_time(total_sec: u32) -> String {
     let mut result = String::new();
-    let mut ttl = total_ttl_sec;
-    let seconds = ttl % 60;
-    ttl /= 60;
-    let minutes = ttl % 60;
-    ttl /= 60;
-    let hours = ttl % 24;
-    let days = ttl / 24;
+    let mut time = total_sec;
+    let seconds = time % 60;
+    time /= 60;
+    let minutes = time % 60;
+    time /= 60;
+    let hours = time % 24;
+    let days = time / 24;
 
     if days != 0 {
-        result.push_str(&format!("{} days", days));
+        if days == 1 {
+            result.push_str("1 day");
+        } else {
+            result.push_str(&format!("{} days", days));
+        }
     }
     if hours != 0 {
         if result.len() > 0 {
             result.push_str(", ");
         }
-        result.push_str(&format!("{} hours", hours));
+        if hours == 1 {
+            result.push_str("1 hour");
+        } else {
+            result.push_str(&format!("{} hours", hours));
+        }
     }
     if minutes != 0 {
         if result.len() > 0{
             result.push_str(", ");
         }
-        result.push_str(&format!("{} minutes", minutes));
+        if minutes == 1 {
+            result.push_str("1 minute");
+        } else {
+            result.push_str(&format!("{} minutes", minutes));
+        }
     }
     if (seconds != 0) || (result.len() == 0) {
         if result.len() > 0 {
             result.push_str(", ");
         }
-        result.push_str(&format!("{} seconds", seconds));
+        if seconds == 1 {
+            result.push_str("1 second");
+        } else {
+            result.push_str(&format!("{} seconds", seconds));
+        }
     }
     result
 }
@@ -748,8 +780,26 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
                 if answer.data.len() != EXPECTED_LEN {
                     eprintln!("Response for data type A is expected to contain exactly {} bytes and instead contained {} bytes. Ignoring...", EXPECTED_LEN, answer.data.len());
                 } else {
-                    println!("  {}.{}.{}.{}  (TTL: {})", answer.data[0], answer.data[1], answer.data[2], answer.data[3], format_ttl(answer.ttl));
+                    println!("  {}.{}.{}.{}  (TTL: {})", answer.data[0], answer.data[1], answer.data[2], answer.data[3], format_time(answer.ttl));
                 }
+            },
+            QueryType::CNAME => {
+                    let mut cursor = io::Cursor::new(&answer.data[..]);
+                    let name_bytes = match deserialize_name(&mut cursor, resp_bytes) {
+                        Ok(name) => name,
+                        Err(e) => {
+                            eprintln!("ERROR: Failed to parse name data from CNAME record: {}", e);
+                            continue;
+                        }
+                    };
+                    let name = match String::from_utf8(name_bytes) {
+                        Ok(name) => name,
+                        Err(e) => {
+                            eprintln!("ERROR: Failed to parse canonical name as UTF8: {}", e);
+                            continue;
+                        }
+                    };
+                    println!("  {}  (TTL: {})", name, format_time(answer.ttl));
             },
             QueryType::MX => {
                 const MIN_LEN: usize = 3;
@@ -772,12 +822,50 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
                             continue;
                         }
                     };
-                    println!("  {}  (Priority: {}, TTL: {})", name, preference, format_ttl(answer.ttl));
+                    println!("  {}  (Priority: {}, TTL: {})", name, preference, format_time(answer.ttl));
                 }
             },
+            QueryType::NS => {
+                    let mut cursor = io::Cursor::new(&answer.data[..]);
+                    let name_bytes = match deserialize_name(&mut cursor, resp_bytes) {
+                        Ok(name) => name,
+                        Err(e) => {
+                            eprintln!("ERROR: Failed to parse name-server data from NS record: {}", e);
+                            continue;
+                        }
+                    };
+                    let name = match String::from_utf8(name_bytes) {
+                        Ok(name) => name,
+                        Err(e) => {
+                            eprintln!("ERROR: Failed to parse authoritative name-server as UTF8: {}", e);
+                            continue;
+                        }
+                    };
+                    println!("  {}  (TTL: {})", name, format_time(answer.ttl));
+            },
+            QueryType::TXT => {
+                // TODO: The RFC says "one or more character strings". A string can only be 256-chars long (due to the single-byte length prefix). Do we just concatenate
+                //       them if they're longer than that? Should we be looping until we get a length < 256?
+                let mut txt_cursor = io::Cursor::new(&answer.data[..]);
+                let txt_bytes = match deserialize_bytes(&mut txt_cursor) {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        eprintln!("ERROR: Failed to parse data from TXT record: {}", e);
+                        continue;
+                    }
+                };
+                let txt = match String::from_utf8(txt_bytes) {
+                    Ok(txt) => txt,
+                    Err(e) => {
+                        eprintln!("ERROR: Failed to parse TXT data as UTF8: {}", e);
+                        continue;
+                    }
+                };
+                println!("  {}  (TTL: {})", txt, format_time(answer.ttl));
+            }
             // TODO: QueryType::AAAA at least?  https://tools.ietf.org/html/rfc3596
             _ => {
-                eprintln!(" Unsupported response data type: {:?}\n", answer.data_type);
+                eprintln!(" Unsupported answer data type: {:?}\n", answer.data_type);
             }
         }
     }
@@ -785,6 +873,62 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
     if verbose || (response.authorities.len() != 0) {
         // TODO: Name server RRs
         println!("Received {} authority server records", response.authorities.len());
+    }
+
+    for authority in &response.authorities {
+        print!("{} ({:?}, {:?}): ", authority.domain_name, authority.data_class, authority.data_type);
+
+        match authority.data_type {
+            QueryType::SOA => {
+                const MIN_LEN: usize = 3;
+                if authority.data.len() < MIN_LEN {
+                    eprintln!("Response for data type SOA is expected to contain at least {} bytes and instead contained {} bytes. Ignoring...", MIN_LEN, authority.data.len());
+                } else {
+                    let mut soa_cursor = io::Cursor::new(&authority.data[..]);
+                    let mname_bytes = match deserialize_name(&mut soa_cursor, resp_bytes) {
+                        Ok(name) => name,
+                        Err(e) => {
+                            eprintln!("ERROR: Failed to parse origin name data from SOA record: {}", e);
+                            continue;
+                        }
+                    };
+                    let rname_bytes = match deserialize_name(&mut soa_cursor, resp_bytes) {
+                        Ok(name) => name,
+                        Err(e) => {
+                            eprintln!("ERROR: Failed to parse responsible mailbox from SOA record: {}", e);
+                            continue;
+                        }
+                    };
+                    let serial = soa_cursor.read_u32::<BigEndian>().unwrap();
+                    let refresh = soa_cursor.read_u32::<BigEndian>().unwrap();
+                    let retry = soa_cursor.read_u32::<BigEndian>().unwrap();
+                    let expire = soa_cursor.read_u32::<BigEndian>().unwrap();
+                    let minimum = soa_cursor.read_u32::<BigEndian>().unwrap();
+
+                    let mname = match String::from_utf8(mname_bytes) {
+                        Ok(name) => name,
+                        Err(e) => {
+                            eprintln!("ERROR: Failed to parse origin name as UTF8: {}", e);
+                            continue;
+                        }
+                    };
+                    let rname = match String::from_utf8(rname_bytes) {
+                        Ok(name) => name,
+                        Err(e) => {
+                            eprintln!("ERROR: Failed to parse responsible mailbox as UTF8: {}", e);
+                            continue;
+                        }
+                    };
+                    println!("  {} - {} (Serial: {}, Refresh: {}, Retry: {}, Expire: {}, Minimum: {}, TTL: {})",
+                        mname, rname, serial,
+                        format_time(refresh), format_time(retry), format_time(expire), format_time(minimum),
+                        format_time(authority.ttl));
+                }
+            },
+            _ => {
+                eprintln!(" Unsupported authority data type: {:?}\n", authority.data_type);
+            }
+        }
     }
 
     if verbose || (response.additionals.len() != 0) {
