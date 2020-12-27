@@ -25,6 +25,16 @@ pub fn to_bytes(input: &str) -> Option<Vec<u8>> {
 
     let max_result_length = (bytes.len()-start_index)/2 + 1;
     let mut result = Vec::with_capacity(max_result_length);
+    if (bytes.len()-start_index) % 2 == 1 {
+        let hexval = hex_char_value(bytes[start_index]);
+        let hexval = match hexval {
+            Some(x) => x,
+            None => return None
+        };
+        result.push(hexval);
+        start_index += 1;
+    }
+
     let mut current_byte = 0;
     let mut nibble_count = 0;
     for i in start_index..bytes.len() {
@@ -96,11 +106,32 @@ mod hex_tests {
     }
 
     #[test]
+    fn hex2bytes_odd_number_of_chars() {
+        let input = "100";
+        let output = to_bytes(input).unwrap();
+        assert_eq!(
+            vec![0x01, 0x00],
+            output
+        );
+    }
+
+    #[test]
     fn bytes2hex() {
         let input = vec![0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x00];
         let output = from_bytes(&input);
         assert_eq!(
             "0xDEADBEEF0100",
+            output
+        );
+    }
+
+    #[test]
+    fn bytes2hex_odd_number_of_chars()
+    {
+        let input = vec![0x01, 0x00];
+        let output = from_bytes(&input);
+        assert_eq!(
+            "0x0100",
             output
         );
     }
