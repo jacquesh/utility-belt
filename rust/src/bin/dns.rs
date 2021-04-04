@@ -1,15 +1,56 @@
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use getopts::Options;
 use rand::Rng;
+use ipconfig;
 use std::{convert::TryInto, env, io, net, process};
 use std::time::{Duration, Instant};
 use std::str::FromStr;
 use std::option::Option;
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
 
 fn print_usage(program: &str, opts: Options) {
     let brief = format!("Usage: {} [OPTIONS] [INPUT]", program);
     print!("{}", opts.usage(&brief));
+}
+
+fn get_server_ip(requested_server: Option<String>, verbose: bool) -> IpAddr {
+    if let Some(requested_server) = requested_server {
+        match IpAddr::from_str(&requested_server) {
+            Ok(ip) => return ip,
+            Err(err) => {
+                eprintln!("Failed to parse server IP {}: {}", requested_server, err);
+                process::exit(1);
+            }
+        }
+    }
+
+    match ipconfig::get_adapters() {
+        Ok(adapters) => {
+            for adapter in adapters {
+                if adapter.oper_status() != ipconfig::OperStatus::IfOperStatusUp {
+                    continue;
+                }
+                if adapter.if_type() != ipconfig::IfType::EthernetCsmacd {
+                    continue;
+                }
+
+                for server_addr in adapter.dns_servers() {
+                    if let IpAddr::V4(server_v4) = server_addr {
+                        if verbose {
+                            println!("Detected system DNS server {:#?} on network adapter {}", server_v4, adapter.friendly_name());
+                        }
+                        return *server_addr;
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("Failed to get system network adapters: {}", e.to_string());
+            eprintln!("Falling back to the default server IP...");
+        }
+    };
+
+   return IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8));
 }
 
 fn main() {
@@ -40,10 +81,7 @@ fn main() {
 
     let verbose = opts.opt_present("v");
     let reverse = opts.opt_present("r");
-    let server = match opts.opt_str("s") {
-        Some(srv_url) => srv_url,
-        None => String::from("1.1.1.1") // TODO: Get the system default
-    };
+    let server = opts.opt_str("s");
     let query_type = match opts.opt_str("t") {
         Some(mut query_type_str) => {
             query_type_str.make_ascii_uppercase();
@@ -59,7 +97,7 @@ fn main() {
                 }
             }
         }
-        None => QueryType::A
+        None => QueryType::A // TODO: Default to running a query for *all* types
     };
 
     if opts.free.is_empty() {
@@ -78,14 +116,7 @@ fn main() {
     }
 
     let query = &opts.free[0];
-    let server_ip: IpAddr;
-    match IpAddr::from_str(&server) {
-        Ok(ip) => server_ip = ip,
-        Err(err) => {
-            eprintln!("Failed to parse server IP {}: {}", server, err);
-            process::exit(1);
-        }
-    }
+    let server_ip = get_server_ip(server, verbose);
 
     process_input(server_ip, query, query_type, reverse, verbose);
 }
@@ -373,12 +404,13 @@ impl DnsQuestion {
             }
         }
 
-        match QueryType::from_int(cursor.read_u16::<BigEndian>()?) {
+        let query_type_int = cursor.read_u16::<BigEndian>()?;
+        match QueryType::from_int(query_type_int) {
             Some(t) => {
                 self.query_type = t;
             },
             None => {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid query type"));
+                return Err(io::Error::new(io::ErrorKind::InvalidData, format!("Invalid query type: {}", query_type_int)));
             }
         }
         match DomainClass::from_int(cursor.read_u16::<BigEndian>()?) {
@@ -480,12 +512,13 @@ impl DnsResourceRecord {
             }
         }
 
-        match QueryType::from_int(cursor.read_u16::<BigEndian>()?) {
+        let query_type_int = cursor.read_u16::<BigEndian>()?;
+        match QueryType::from_int(query_type_int) {
             Some(t) => {
                 self.data_type = t;
             },
             None => {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid query type"));
+                return Err(io::Error::new(io::ErrorKind::InvalidData, format!("Invalid query type: {}", query_type_int)));
             }
         };
         match DomainClass::from_int(cursor.read_u16::<BigEndian>()?) {
