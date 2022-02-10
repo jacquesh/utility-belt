@@ -61,7 +61,7 @@ fn main() {
     opts_spec.optflag("r", "reverse", "do a reverse lookup (find the domain name given an IP)");
     opts_spec.optflag("v", "verbose", "print additional data");
     opts_spec.optopt("s", "server", "the address of the server(s) to which the DNS queries should be sent", "IP-ADDR");
-    opts_spec.optopt("t", "type", "the type of record to request. A (default), CNAME, MX, etc", "TYPE");
+    opts_spec.optopt("t", "type", "the type of record to request. A (default), CNAME, MX, etc. Ignored for reverse lookups", "TYPE");
     let opts = match opts_spec.parse(&args[1..]) {
         Ok(o) => o,
         Err(e) => {
@@ -91,8 +91,9 @@ fn main() {
                 "MX" => QueryType::MX,
                 "NS" => QueryType::NS,
                 "TXT" => QueryType::TXT,
+                "PTR" => QueryType::PTR,
                 _ => {
-                    eprintln!("Unsupported query type: {} Supported options are A, CNAME, MX, NS, TXT", &query_type_str);
+                    eprintln!("Unsupported query type: {} Supported options are A, CNAME, MX, NS, TXT, PTR", &query_type_str);
                     process::exit(1);
                 }
             }
@@ -657,16 +658,33 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
     let mut request = DnsPacket::default();
     request.header.request_id = rng.gen::<u16>();
     request.header.recursion_desired = true; // TODO: Maybe we want to be able to ask for no recursion?
-    if reverse {
-        // TODO: Implement this properly.
-        // Defined in the spec @ https://tools.ietf.org/html/rfc1035 and https://www.freesoft.org/CIE/Topics/75.htm
-        request.header.opcode = OpCode::Inverse;
-    }
     request.header.query_count = 1;
 
     let mut question = DnsQuestion::default();
-    question.domain_name = String::from(domain); // TODO: Can we not just use the &str all the way through?
-    question.query_type = qtype;
+    if reverse {
+        match IpAddr::from_str(domain) {
+            Ok(IpAddr::V4(v4addr)) => {
+                question.domain_name = format!("{}.{}.{}.{}.in-addr.arpa",
+                                               v4addr.octets()[3],
+                                               v4addr.octets()[2],
+                                               v4addr.octets()[1],
+                                               v4addr.octets()[0]);
+                question.query_type = QueryType::PTR;
+            },
+            Ok(IpAddr::V6(_)) => {
+                eprintln!("Reverse IPv6 lookups are not currently supported");
+                process::exit(1);
+            },
+            Err(err) => {
+                eprintln!("Failed to parse request string as IP address {}: {}", domain, err);
+                process::exit(1);
+            }
+        };
+    } else {
+        question.domain_name = String::from(domain);
+        question.query_type = qtype;
+    }
+
     question.query_class = DomainClass::Internet;
     request.questions.push(question);
 
@@ -895,6 +913,24 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
                     }
                 };
                 println!("  {}  (TTL: {})", txt, format_time(answer.ttl));
+            }
+            QueryType::PTR => {
+                    let mut cursor = io::Cursor::new(&answer.data[..]);
+                    let name_bytes = match deserialize_name(&mut cursor, resp_bytes) {
+                        Ok(name) => name,
+                        Err(e) => {
+                            eprintln!("ERROR: Failed to parse domain name from PTR record: {}", e);
+                            continue;
+                        }
+                    };
+                    let name = match String::from_utf8(name_bytes) {
+                        Ok(name) => name,
+                        Err(e) => {
+                            eprintln!("ERROR: Failed to parse domain name as UTF8: {}", e);
+                            continue;
+                        }
+                    };
+                    println!("  {}  (TTL: {})", name, format_time(answer.ttl));
             }
             // TODO: QueryType::AAAA at least?  https://tools.ietf.org/html/rfc3596
             _ => {
