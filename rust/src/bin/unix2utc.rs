@@ -5,11 +5,14 @@ use chrono::offset::TimeZone;
 use getopts::Options;
 
 fn print_usage(program: &str, opts: Options) {
-    let brief = format!("Usage: {} [OPTIONS] [INPUT]...", program);
+    let brief = format!("Usage: {} [OPTIONS] [TIMESTAMP]...", program);
     print!("{}", opts.usage(&brief));
 
     println!("");
     println!("If stdin has been redirected then each line of stdin will be separately decoded and printed");
+    println!("");
+    println!("TIMESTAMP should be an integer representing seconds or milliseconds since the Unix epoch.");
+    println!("TIMESTAMP can also be given as the string 'now' (case-insensitive) to output the curent time");
 }
 
 fn main() {
@@ -79,8 +82,15 @@ fn process_input(input: &str, use_millis: bool, use_iso_format: bool) {
     let input_timestamp = match input.parse::<i64>() {
         Ok(n) => n,
         Err(e) => {
-            eprintln!("Bad input: \"{}\" is not a valid unix timestamp. Error: '{}'", input, e);
-            return;
+            if input.eq_ignore_ascii_case("now") {
+                match use_millis {
+                    true => (Utc::now().timestamp() * 1000) + (Utc::now().timestamp_subsec_millis() as i64),
+                    false => Utc::now().timestamp(),
+                }
+            } else {
+                eprintln!("Bad input: \"{}\" is not a valid unix timestamp. Error: '{}'", input, e);
+                return;
+            }
         }
     };
 

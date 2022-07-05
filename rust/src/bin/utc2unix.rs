@@ -5,11 +5,14 @@ use chrono::offset::TimeZone;
 use getopts::Options;
 
 fn print_usage(program: &str, opts: Options) {
-    let brief = format!("Usage: {} [OPTIONS] [INPUT]...", program);
+    let brief = format!("Usage: {} [OPTIONS] [DATETIME]...", program);
     print!("{}", opts.usage(&brief));
 
     println!("");
     println!("If stdin has been redirected then each line of stdin will be separately decoded and printed");
+    println!("");
+    println!("DATETIME should be a string representing the current UTC time");
+    println!("DATETIME can also be the string 'now' (case-insensitive) to output the curent timestamp");
 }
 
 fn main() {
@@ -75,6 +78,11 @@ fn main() {
 }
 
 fn process_input(input: &str, use_millis: bool) {
+    if input.eq_ignore_ascii_case("now") {
+        output_timestamp(Utc::now(), use_millis);
+        return;
+    }
+
     match DateTime::parse_from_rfc3339(input) {
         Ok(dt) => {
             output_timestamp(dt, use_millis);
