@@ -1,3 +1,0 @@
-- Fix inline TODOs in zig/hex2dec
-- Add support for reading from stdin to hex2dec & dec2hex, so that we can pipe things together (e.h to check roundtrip, we can just `dec2hex $NUMBER | hex2dec` and check that it equals $NUMBER)
-

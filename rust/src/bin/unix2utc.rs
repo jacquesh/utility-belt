@@ -12,7 +12,7 @@ fn print_usage(program: &str, opts: Options) {
     println!("If stdin has been redirected then each line of stdin will be separately decoded and printed");
     println!("");
     println!("TIMESTAMP should be an integer representing seconds or milliseconds since the Unix epoch.");
-    println!("TIMESTAMP can also be given as the string 'now' (case-insensitive) to output the curent time");
+    println!("TIMESTAMP can also be the string 'now' (case-insensitive) to output the curent time");
 }
 
 fn main() {
