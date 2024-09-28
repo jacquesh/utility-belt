@@ -77,9 +77,9 @@ proc offset_of_first_matching_line(inputFile: File, inputLength: BiggestInt, pre
 proc main() =
   let args = os.commandLineParams()
   if (len(args) != 2) or (args[0] == "--help"):
-    stderr.write("presearch: Search a file (whose lines are sorted) for lines with a particular prefix")
-    stderr.write("")
-    stderr.write("Usage: presearch <input file path> <prefix>")
+    stderr.writeLine("presearch: Search a file (whose lines are sorted) for lines with a particular prefix")
+    stderr.writeLine("")
+    stderr.writeLine("Usage: presearch <input file path> <prefix>")
     return
 
   let inputPath = args[0]
