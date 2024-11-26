@@ -1,8 +1,8 @@
-use std::{env, io, process};
 use atty::Stream;
-use chrono::{DateTime, Utc};
 use chrono::offset::TimeZone;
+use chrono::{DateTime, Utc};
 use getopts::Options;
+use std::{env, io, process};
 
 fn print_usage(program: &str, opts: Options) {
     let brief = format!("Usage: {} [OPTIONS] [DATETIME]...", program);
@@ -12,7 +12,9 @@ fn print_usage(program: &str, opts: Options) {
     println!("If stdin has been redirected then each line of stdin will be separately decoded and printed");
     println!("");
     println!("DATETIME should be a string representing the current UTC time");
-    println!("DATETIME can also be the string 'now' (case-insensitive) to output the curent timestamp");
+    println!(
+        "DATETIME can also be the string 'now' (case-insensitive) to output the curent timestamp"
+    );
 }
 
 fn main() {
@@ -21,7 +23,11 @@ fn main() {
     let mut opts_spec = Options::new();
     opts_spec.optflag("h", "help", "print this help menu");
     opts_spec.optflag("m", "millis", "use the input as the number of milliseconds since the unix epoch, rather than the number of seconds");
-    opts_spec.optflag("s", "iso", "use the standard ISO-8601/RFC-3339 format when formatting the output text");
+    opts_spec.optflag(
+        "s",
+        "iso",
+        "use the standard ISO-8601/RFC-3339 format when formatting the output text",
+    );
     let opts = match opts_spec.parse(&args[1..]) {
         Ok(o) => o,
         Err(e) => {
@@ -32,7 +38,7 @@ fn main() {
     };
 
     if opts.opt_present("h") {
-        println!("Convert a unix timestamp into an equivalent human-readable date-time string");
+        println!("Convert a human-readable date-time string into an equivalent unix timestamp");
         println!("");
 
         print_usage(program, opts_spec);
@@ -87,7 +93,7 @@ fn process_input(input: &str, use_millis: bool) {
         Ok(dt) => {
             output_timestamp(dt, use_millis);
             return;
-        },
+        }
         Err(_e) => {}
     };
 
@@ -95,7 +101,7 @@ fn process_input(input: &str, use_millis: bool) {
         Ok(dt) => {
             output_timestamp(dt, use_millis);
             return;
-        },
+        }
         Err(_e) => {}
     };
 
@@ -103,11 +109,14 @@ fn process_input(input: &str, use_millis: bool) {
         Ok(dt) => {
             output_timestamp(dt, use_millis);
             return;
-        },
+        }
         Err(_e) => {}
     };
 
-    eprintln!("Bad input: {} is not a time string with a recognized format", input);
+    eprintln!(
+        "Bad input: {} is not a time string with a recognized format",
+        input
+    );
 }
 
 fn output_timestamp(instant: DateTime<impl TimeZone>, use_millis: bool) {
@@ -118,4 +127,3 @@ fn output_timestamp(instant: DateTime<impl TimeZone>, use_millis: bool) {
         println!("{}", instant.timestamp());
     }
 }
-
