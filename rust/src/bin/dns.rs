@@ -1,12 +1,12 @@
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use getopts::Options;
-use rand::Rng;
 use ipconfig;
-use std::{convert::TryInto, env, io, net, process};
-use std::time::{Duration, Instant};
-use std::str::FromStr;
-use std::option::Option;
+use rand::Rng;
 use std::net::{IpAddr, Ipv4Addr};
+use std::option::Option;
+use std::str::FromStr;
+use std::time::{Duration, Instant};
+use std::{convert::TryInto, env, io, net, process};
 
 fn print_usage(program: &str, opts: Options) {
     let brief = format!("Usage: {} [OPTIONS] [INPUT]", program);
@@ -37,7 +37,11 @@ fn get_server_ip(requested_server: Option<String>, verbose: bool) -> IpAddr {
                 for server_addr in adapter.dns_servers() {
                     if let IpAddr::V4(server_v4) = server_addr {
                         if verbose {
-                            println!("Detected system DNS server {:#?} on network adapter {}", server_v4, adapter.friendly_name());
+                            println!(
+                                "Detected system DNS server {:#?} on network adapter {}",
+                                server_v4,
+                                adapter.friendly_name()
+                            );
                         }
                         return *server_addr;
                     }
@@ -50,7 +54,7 @@ fn get_server_ip(requested_server: Option<String>, verbose: bool) -> IpAddr {
         }
     };
 
-   return IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8));
+    return IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8));
 }
 
 fn main() {
@@ -58,10 +62,24 @@ fn main() {
     let program = &args[0];
     let mut opts_spec = Options::new();
     opts_spec.optflag("h", "help", "print this help menu");
-    opts_spec.optflag("r", "reverse", "do a reverse lookup (find the domain name given an IP)");
+    opts_spec.optflag(
+        "r",
+        "reverse",
+        "do a reverse lookup (find the domain name given an IP)",
+    );
     opts_spec.optflag("v", "verbose", "print additional data");
-    opts_spec.optopt("s", "server", "the address of the server(s) to which the DNS queries should be sent", "IP-ADDR");
-    opts_spec.optopt("t", "type", "the type of record to request. A (default), CNAME, MX, etc. Ignored for reverse lookups", "TYPE");
+    opts_spec.optopt(
+        "s",
+        "server",
+        "the address of the server(s) to which the DNS queries should be sent",
+        "IP-ADDR",
+    );
+    opts_spec.optopt(
+        "t",
+        "type",
+        "the type of record to request. A (default), CNAME, MX, etc. Ignored for reverse lookups",
+        "TYPE",
+    );
     let opts = match opts_spec.parse(&args[1..]) {
         Ok(o) => o,
         Err(e) => {
@@ -98,7 +116,7 @@ fn main() {
                 }
             }
         }
-        None => QueryType::A // TODO: Default to running a query for *all* types
+        None => QueryType::A, // TODO: Default to running a query for *all* types
     };
 
     if opts.free.is_empty() {
@@ -109,7 +127,9 @@ fn main() {
     }
 
     if opts.free.len() > 1 {
-        eprint!("Warning: Cannot lookup multiple domains in a single execution. Ignoring arguments: ");
+        eprint!(
+            "Warning: Cannot lookup multiple domains in a single execution. Ignoring arguments: "
+        );
         for arg in &opts.free[1..] {
             eprint!("{} ", arg);
         }
@@ -127,7 +147,7 @@ enum DomainClass {
     Reserved = 0,
     Internet = 1,
     Chaos = 3,
-    Hesiod = 4
+    Hesiod = 4,
 }
 
 impl DomainClass {
@@ -137,7 +157,7 @@ impl DomainClass {
             1 => Some(DomainClass::Internet),
             3 => Some(DomainClass::Chaos),
             4 => Some(DomainClass::Hesiod),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -176,7 +196,7 @@ enum QueryType {
     LOC = 29,
     NXT = 30,
     EID = 31,
-    NIMLOC = 32
+    NIMLOC = 32,
 }
 
 impl QueryType {
@@ -215,7 +235,7 @@ impl QueryType {
             30 => Some(QueryType::NXT),
             31 => Some(QueryType::EID),
             32 => Some(QueryType::NIMLOC),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -224,7 +244,7 @@ impl QueryType {
 enum OpCode {
     Standard = 0,
     Inverse = 1,
-    Status = 2
+    Status = 2,
 }
 
 impl OpCode {
@@ -233,7 +253,7 @@ impl OpCode {
             0 => Some(OpCode::Standard),
             1 => Some(OpCode::Inverse),
             2 => Some(OpCode::Status),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -245,7 +265,7 @@ enum ResponseCode {
     ServerFailure = 2,
     NameError = 3,
     NotImplemented = 4,
-    Refused = 5
+    Refused = 5,
 }
 
 impl ResponseCode {
@@ -257,11 +277,10 @@ impl ResponseCode {
             3 => Some(ResponseCode::NameError),
             4 => Some(ResponseCode::NotImplemented),
             5 => Some(ResponseCode::Refused),
-            _ => None
+            _ => None,
         }
     }
 }
-
 
 #[derive(Debug)]
 struct DnsHeader {
@@ -326,9 +345,12 @@ impl DnsHeader {
         match OpCode::from_int((bitflags >> 11) & 0b1111) {
             Some(oc) => {
                 self.opcode = oc;
-            },
+            }
             None => {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid query operation code"));
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Invalid query operation code",
+                ));
             }
         }
         self.is_response = ((bitflags >> 15) & 0b1) == 1;
@@ -339,9 +361,12 @@ impl DnsHeader {
         match ResponseCode::from_int(bitflags & 0b1111) {
             Some(rc) => {
                 self.rcode = rc;
-            },
+            }
             None => {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid response code"));
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Invalid response code",
+                ));
             }
         }
         self.query_count = cursor.read_u16::<BigEndian>()?;
@@ -362,7 +387,7 @@ impl DnsHeader {
 struct DnsQuestion {
     domain_name: String,
     query_type: QueryType,
-    query_class: DomainClass
+    query_class: DomainClass,
 }
 
 impl Default for DnsQuestion {
@@ -370,7 +395,7 @@ impl Default for DnsQuestion {
         DnsQuestion {
             domain_name: String::new(),
             query_type: QueryType::Unknown,
-            query_class: DomainClass::Reserved
+            query_class: DomainClass::Reserved,
         }
     }
 }
@@ -378,7 +403,12 @@ impl Default for DnsQuestion {
 impl DnsQuestion {
     fn serialize(&self, buffer: &mut Vec<u8>) -> io::Result<()> {
         for label in self.domain_name.split('.') {
-            buffer.write_u8(label.len().try_into().expect("label length greater than 255"))?;
+            buffer.write_u8(
+                label
+                    .len()
+                    .try_into()
+                    .expect("label length greater than 255"),
+            )?;
             for ch in label.bytes() {
                 buffer.write_u8(ch)?;
             }
@@ -409,17 +439,23 @@ impl DnsQuestion {
         match QueryType::from_int(query_type_int) {
             Some(t) => {
                 self.query_type = t;
-            },
+            }
             None => {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, format!("Invalid query type: {}", query_type_int)));
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Invalid query type: {}", query_type_int),
+                ));
             }
         }
         match DomainClass::from_int(cursor.read_u16::<BigEndian>()?) {
             Some(class) => {
                 self.query_class = class;
-            },
+            }
             None => {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid domain class"));
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Invalid domain class",
+                ));
             }
         }
         Ok(())
@@ -439,7 +475,7 @@ struct DnsResourceRecord {
     data_class: DomainClass,
     ttl: u32,
     data_length: u16,
-    data: Vec<u8> // TODO: Maybe we want this to be a &[u8]? To save on copying? Depends on the deserialize
+    data: Vec<u8>, // TODO: Maybe we want this to be a &[u8]? To save on copying? Depends on the deserialize
 }
 
 impl Default for DnsResourceRecord {
@@ -450,7 +486,7 @@ impl Default for DnsResourceRecord {
             data_class: DomainClass::Reserved,
             ttl: 0,
             data_length: 0,
-            data: Vec::new()
+            data: Vec::new(),
         }
     }
 }
@@ -478,7 +514,6 @@ fn deserialize_name(cursor: &mut io::Cursor<&[u8]>, all_data: &[u8]) -> io::Resu
             let mut pointed_result = deserialize_name(&mut ptr_cursor, all_data)?;
             result.append(&mut pointed_result);
             break;
-
         } else {
             for _ in 0..len {
                 result.push(cursor.read_u8()?);
@@ -491,7 +526,7 @@ fn deserialize_name(cursor: &mut io::Cursor<&[u8]>, all_data: &[u8]) -> io::Resu
 fn deserialize_bytes(cursor: &mut io::Cursor<&[u8]>) -> io::Result<Vec<u8>> {
     let len = cursor.read_u8()?;
     if len == 0 {
-        return Ok(Vec::new())
+        return Ok(Vec::new());
     }
 
     let mut result = Vec::new();
@@ -507,7 +542,7 @@ impl DnsResourceRecord {
         match String::from_utf8(name_bytes) {
             Ok(name) => {
                 self.domain_name = name;
-            },
+            }
             Err(e) => {
                 return Err(io::Error::new(io::ErrorKind::InvalidData, e));
             }
@@ -517,17 +552,23 @@ impl DnsResourceRecord {
         match QueryType::from_int(query_type_int) {
             Some(t) => {
                 self.data_type = t;
-            },
+            }
             None => {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, format!("Invalid query type: {}", query_type_int)));
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Invalid query type: {}", query_type_int),
+                ));
             }
         };
         match DomainClass::from_int(cursor.read_u16::<BigEndian>()?) {
             Some(class) => {
                 self.data_class = class;
-            },
+            }
             None => {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid domain class"));
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Invalid domain class",
+                ));
             }
         };
         self.ttl = cursor.read_u32::<BigEndian>()?;
@@ -540,7 +581,10 @@ impl DnsResourceRecord {
         Ok(())
     }
 
-    fn deserialize_from(cursor: &mut io::Cursor<&[u8]>, all_data: &[u8]) -> io::Result<DnsResourceRecord> {
+    fn deserialize_from(
+        cursor: &mut io::Cursor<&[u8]>,
+        all_data: &[u8],
+    ) -> io::Result<DnsResourceRecord> {
         let mut result = DnsResourceRecord::default();
         result.deserialize(cursor, all_data)?;
         Ok(result)
@@ -553,7 +597,7 @@ struct DnsPacket {
     questions: Vec<DnsQuestion>,
     answers: Vec<DnsResourceRecord>,
     authorities: Vec<DnsResourceRecord>,
-    additionals: Vec<DnsResourceRecord>
+    additionals: Vec<DnsResourceRecord>,
 }
 
 impl Default for DnsPacket {
@@ -563,7 +607,7 @@ impl Default for DnsPacket {
             questions: Vec::new(),
             answers: Vec::new(),
             authorities: Vec::new(),
-            additionals: Vec::new()
+            additionals: Vec::new(),
         }
     }
 }
@@ -578,24 +622,36 @@ impl DnsPacket {
         return Ok(());
     }
 
-    fn deserialize(&mut self, header: DnsHeader, cursor: &mut io::Cursor<&[u8]>, all_data: &[u8]) -> io::Result<()> {
+    fn deserialize(
+        &mut self,
+        header: DnsHeader,
+        cursor: &mut io::Cursor<&[u8]>,
+        all_data: &[u8],
+    ) -> io::Result<()> {
         self.header = header;
         for _ in 0..self.header.query_count {
             self.questions.push(DnsQuestion::deserialize_from(cursor)?);
         }
         for _ in 0..self.header.answer_count {
-            self.answers.push(DnsResourceRecord::deserialize_from(cursor, all_data)?);
+            self.answers
+                .push(DnsResourceRecord::deserialize_from(cursor, all_data)?);
         }
         for _ in 0..self.header.nameserver_count {
-            self.authorities.push(DnsResourceRecord::deserialize_from(cursor, all_data)?);
+            self.authorities
+                .push(DnsResourceRecord::deserialize_from(cursor, all_data)?);
         }
         for _ in 0..self.header.additional_count {
-            self.additionals.push(DnsResourceRecord::deserialize_from(cursor, all_data)?);
+            self.additionals
+                .push(DnsResourceRecord::deserialize_from(cursor, all_data)?);
         }
         Ok(())
     }
 
-    fn deserialize_from(header: DnsHeader, cursor: &mut io::Cursor<&[u8]>, all_data: &[u8]) -> io::Result<DnsPacket> {
+    fn deserialize_from(
+        header: DnsHeader,
+        cursor: &mut io::Cursor<&[u8]>,
+        all_data: &[u8],
+    ) -> io::Result<DnsPacket> {
         let mut result = DnsPacket::default();
         result.deserialize(header, cursor, all_data)?;
         Ok(result)
@@ -630,7 +686,7 @@ fn format_time(total_sec: u32) -> String {
         }
     }
     if minutes != 0 {
-        if result.len() > 0{
+        if result.len() > 0 {
             result.push_str(", ");
         }
         if minutes == 1 {
@@ -664,19 +720,24 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
     if reverse {
         match IpAddr::from_str(domain) {
             Ok(IpAddr::V4(v4addr)) => {
-                question.domain_name = format!("{}.{}.{}.{}.in-addr.arpa",
-                                               v4addr.octets()[3],
-                                               v4addr.octets()[2],
-                                               v4addr.octets()[1],
-                                               v4addr.octets()[0]);
+                question.domain_name = format!(
+                    "{}.{}.{}.{}.in-addr.arpa",
+                    v4addr.octets()[3],
+                    v4addr.octets()[2],
+                    v4addr.octets()[1],
+                    v4addr.octets()[0]
+                );
                 question.query_type = QueryType::PTR;
-            },
+            }
             Ok(IpAddr::V6(_)) => {
                 eprintln!("Reverse IPv6 lookups are not currently supported");
                 process::exit(1);
-            },
+            }
             Err(err) => {
-                eprintln!("Failed to parse request string as IP address {}: {}", domain, err);
+                eprintln!(
+                    "Failed to parse request string as IP address {}: {}",
+                    domain, err
+                );
                 process::exit(1);
             }
         };
@@ -690,7 +751,7 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
 
     let mut request_data_buf: Vec<u8> = Vec::new();
     match request.serialize(&mut request_data_buf) {
-        Ok(()) => {},
+        Ok(()) => {}
         Err(e) => {
             eprintln!("Failed to serialize request: {}", e);
             process::exit(1);
@@ -711,10 +772,12 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
             }
             Err(e) => {
                 if port_select_attempts >= MAX_PORT_SELECT_ATTEMPTS {
-                    eprintln!("Failed to bind to a local port after {} retries. Terminating.", MAX_PORT_SELECT_ATTEMPTS);
+                    eprintln!(
+                        "Failed to bind to a local port after {} retries. Terminating.",
+                        MAX_PORT_SELECT_ATTEMPTS
+                    );
                     process::exit(1);
-                } else
-                {
+                } else {
                     if verbose {
                         eprintln!("Failed to bind to local port {} ({}), retrying", port, e);
                     }
@@ -725,15 +788,19 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
     }
 
     let dest_addr = net::SocketAddr::from((server_ip, 53));
-    socket.set_read_timeout(Some(Duration::from_secs(5))).expect("failed to set socket read timeout");
-    socket.set_write_timeout(Some(Duration::from_secs(5))).expect("failed to set socket write timeout");
+    socket
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .expect("failed to set socket read timeout");
+    socket
+        .set_write_timeout(Some(Duration::from_secs(5)))
+        .expect("failed to set socket write timeout");
     let send_instant = Instant::now();
     match socket.send_to(&request_data_buf, dest_addr) {
         Ok(bytes_written) => {
             if verbose {
                 println!("Successfully wrote {} bytes of request to the network, waiting for response...", bytes_written);
             }
-        },
+        }
         Err(e) => {
             eprintln!("Failed to send request to the network: {}", e);
             process::exit(1);
@@ -748,22 +815,31 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
             process::exit(1);
         }
     };
-    let roundtrip_ms = (send_instant.elapsed().as_micros() as f64)/1000.0;
+    let roundtrip_ms = (send_instant.elapsed().as_micros() as f64) / 1000.0;
     let resp_bytes = &resp_buffer[..bytes_read];
 
     if src_addr != dest_addr {
-        eprintln!("Received answer from unexpected source address: {} Ignoring...", src_addr);
+        eprintln!(
+            "Received answer from unexpected source address: {} Ignoring...",
+            src_addr
+        );
         process::exit(1);
     }
 
     if verbose {
-        print!("Received {} byte response from {} after {:.1}ms - ", bytes_read, src_addr, roundtrip_ms);
+        print!(
+            "Received {} byte response from {} after {:.1}ms - ",
+            bytes_read, src_addr, roundtrip_ms
+        );
         for b in resp_bytes {
             print!("{:x}", b);
         }
         println!();
     } else {
-        println!("Received response from {} after {:.1}ms", src_addr, roundtrip_ms);
+        println!(
+            "Received response from {} after {:.1}ms",
+            src_addr, roundtrip_ms
+        );
     }
 
     let mut cursor = io::Cursor::new(resp_bytes);
@@ -807,7 +883,7 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
             if verbose {
                 println!("  Response code: {:?}", response.header.rcode);
             }
-        },
+        }
         _ => {
             eprintln!("  Response code: ERROR: {:?}", response.header.rcode);
         }
@@ -823,7 +899,10 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
     }
 
     for answer in &response.answers {
-        print!("{} ({:?}, {:?}): ", answer.domain_name, answer.data_class, answer.data_type);
+        print!(
+            "{} ({:?}, {:?}): ",
+            answer.domain_name, answer.data_class, answer.data_type
+        );
 
         match answer.data_type {
             QueryType::A => {
@@ -831,27 +910,34 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
                 if answer.data.len() != EXPECTED_LEN {
                     eprintln!("Response for data type A is expected to contain exactly {} bytes and instead contained {} bytes. Ignoring...", EXPECTED_LEN, answer.data.len());
                 } else {
-                    println!("  {}.{}.{}.{}  (TTL: {})", answer.data[0], answer.data[1], answer.data[2], answer.data[3], format_time(answer.ttl));
+                    println!(
+                        "  {}.{}.{}.{}  (TTL: {})",
+                        answer.data[0],
+                        answer.data[1],
+                        answer.data[2],
+                        answer.data[3],
+                        format_time(answer.ttl)
+                    );
                 }
-            },
+            }
             QueryType::CNAME => {
-                    let mut cursor = io::Cursor::new(&answer.data[..]);
-                    let name_bytes = match deserialize_name(&mut cursor, resp_bytes) {
-                        Ok(name) => name,
-                        Err(e) => {
-                            eprintln!("ERROR: Failed to parse name data from CNAME record: {}", e);
-                            continue;
-                        }
-                    };
-                    let name = match String::from_utf8(name_bytes) {
-                        Ok(name) => name,
-                        Err(e) => {
-                            eprintln!("ERROR: Failed to parse canonical name as UTF8: {}", e);
-                            continue;
-                        }
-                    };
-                    println!("  {}  (TTL: {})", name, format_time(answer.ttl));
-            },
+                let mut cursor = io::Cursor::new(&answer.data[..]);
+                let name_bytes = match deserialize_name(&mut cursor, resp_bytes) {
+                    Ok(name) => name,
+                    Err(e) => {
+                        eprintln!("ERROR: Failed to parse name data from CNAME record: {}", e);
+                        continue;
+                    }
+                };
+                let name = match String::from_utf8(name_bytes) {
+                    Ok(name) => name,
+                    Err(e) => {
+                        eprintln!("ERROR: Failed to parse canonical name as UTF8: {}", e);
+                        continue;
+                    }
+                };
+                println!("  {}  (TTL: {})", name, format_time(answer.ttl));
+            }
             QueryType::MX => {
                 const MIN_LEN: usize = 3;
                 if answer.data.len() < MIN_LEN {
@@ -862,7 +948,10 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
                     let name_bytes = match deserialize_name(&mut mx_cursor, resp_bytes) {
                         Ok(name) => name,
                         Err(e) => {
-                            eprintln!("ERROR: Failed to parse exchange name data from MX record: {}", e);
+                            eprintln!(
+                                "ERROR: Failed to parse exchange name data from MX record: {}",
+                                e
+                            );
                             continue;
                         }
                     };
@@ -873,27 +962,38 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
                             continue;
                         }
                     };
-                    println!("  {}  (Priority: {}, TTL: {})", name, preference, format_time(answer.ttl));
+                    println!(
+                        "  {}  (Priority: {}, TTL: {})",
+                        name,
+                        preference,
+                        format_time(answer.ttl)
+                    );
                 }
-            },
+            }
             QueryType::NS => {
-                    let mut cursor = io::Cursor::new(&answer.data[..]);
-                    let name_bytes = match deserialize_name(&mut cursor, resp_bytes) {
-                        Ok(name) => name,
-                        Err(e) => {
-                            eprintln!("ERROR: Failed to parse name-server data from NS record: {}", e);
-                            continue;
-                        }
-                    };
-                    let name = match String::from_utf8(name_bytes) {
-                        Ok(name) => name,
-                        Err(e) => {
-                            eprintln!("ERROR: Failed to parse authoritative name-server as UTF8: {}", e);
-                            continue;
-                        }
-                    };
-                    println!("  {}  (TTL: {})", name, format_time(answer.ttl));
-            },
+                let mut cursor = io::Cursor::new(&answer.data[..]);
+                let name_bytes = match deserialize_name(&mut cursor, resp_bytes) {
+                    Ok(name) => name,
+                    Err(e) => {
+                        eprintln!(
+                            "ERROR: Failed to parse name-server data from NS record: {}",
+                            e
+                        );
+                        continue;
+                    }
+                };
+                let name = match String::from_utf8(name_bytes) {
+                    Ok(name) => name,
+                    Err(e) => {
+                        eprintln!(
+                            "ERROR: Failed to parse authoritative name-server as UTF8: {}",
+                            e
+                        );
+                        continue;
+                    }
+                };
+                println!("  {}  (TTL: {})", name, format_time(answer.ttl));
+            }
             QueryType::TXT => {
                 // TODO: The RFC says "one or more character strings". A string can only be 256-chars long (due to the single-byte length prefix). Do we just concatenate
                 //       them if they're longer than that? Should we be looping until we get a length < 256?
@@ -915,22 +1015,22 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
                 println!("  {}  (TTL: {})", txt, format_time(answer.ttl));
             }
             QueryType::PTR => {
-                    let mut cursor = io::Cursor::new(&answer.data[..]);
-                    let name_bytes = match deserialize_name(&mut cursor, resp_bytes) {
-                        Ok(name) => name,
-                        Err(e) => {
-                            eprintln!("ERROR: Failed to parse domain name from PTR record: {}", e);
-                            continue;
-                        }
-                    };
-                    let name = match String::from_utf8(name_bytes) {
-                        Ok(name) => name,
-                        Err(e) => {
-                            eprintln!("ERROR: Failed to parse domain name as UTF8: {}", e);
-                            continue;
-                        }
-                    };
-                    println!("  {}  (TTL: {})", name, format_time(answer.ttl));
+                let mut cursor = io::Cursor::new(&answer.data[..]);
+                let name_bytes = match deserialize_name(&mut cursor, resp_bytes) {
+                    Ok(name) => name,
+                    Err(e) => {
+                        eprintln!("ERROR: Failed to parse domain name from PTR record: {}", e);
+                        continue;
+                    }
+                };
+                let name = match String::from_utf8(name_bytes) {
+                    Ok(name) => name,
+                    Err(e) => {
+                        eprintln!("ERROR: Failed to parse domain name as UTF8: {}", e);
+                        continue;
+                    }
+                };
+                println!("  {}  (TTL: {})", name, format_time(answer.ttl));
             }
             // TODO: QueryType::AAAA at least?  https://tools.ietf.org/html/rfc3596
             _ => {
@@ -941,11 +1041,17 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
 
     if verbose || (response.authorities.len() != 0) {
         // TODO: Name server RRs
-        println!("Received {} authority server records", response.authorities.len());
+        println!(
+            "Received {} authority server records",
+            response.authorities.len()
+        );
     }
 
     for authority in &response.authorities {
-        print!("{} ({:?}, {:?}): ", authority.domain_name, authority.data_class, authority.data_type);
+        print!(
+            "{} ({:?}, {:?}): ",
+            authority.domain_name, authority.data_class, authority.data_type
+        );
 
         match authority.data_type {
             QueryType::SOA => {
@@ -957,14 +1063,20 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
                     let mname_bytes = match deserialize_name(&mut soa_cursor, resp_bytes) {
                         Ok(name) => name,
                         Err(e) => {
-                            eprintln!("ERROR: Failed to parse origin name data from SOA record: {}", e);
+                            eprintln!(
+                                "ERROR: Failed to parse origin name data from SOA record: {}",
+                                e
+                            );
                             continue;
                         }
                     };
                     let rname_bytes = match deserialize_name(&mut soa_cursor, resp_bytes) {
                         Ok(name) => name,
                         Err(e) => {
-                            eprintln!("ERROR: Failed to parse responsible mailbox from SOA record: {}", e);
+                            eprintln!(
+                                "ERROR: Failed to parse responsible mailbox from SOA record: {}",
+                                e
+                            );
                             continue;
                         }
                     };
@@ -993,9 +1105,12 @@ fn process_input(server_ip: IpAddr, domain: &str, qtype: QueryType, reverse: boo
                         format_time(refresh), format_time(retry), format_time(expire), format_time(minimum),
                         format_time(authority.ttl));
                 }
-            },
+            }
             _ => {
-                eprintln!(" Unsupported authority data type: {:?}\n", authority.data_type);
+                eprintln!(
+                    " Unsupported authority data type: {:?}\n",
+                    authority.data_type
+                );
             }
         }
     }
